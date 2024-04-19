@@ -10,9 +10,13 @@
 typedef long Int;
 typedef double real;
 
+#define PRINT_JAC       1
 #define DO_TIMING       1
 #define PRINT_LEVEL     1
 #define uedge_min(a,b)  (((a)<(b)) ? (a) : (b))
+
+/* C protos */
+int jacmm_c_fn(char *fn, Int neq, real *jac, Int *ja, Int *ia);
 
 /* Fortran protos */
 extern void jac_calc_iv_(Int *iv, Int *neq, real *t, real* yl, real *yldot00, Int *ml, Int *mu,
@@ -33,6 +37,15 @@ jac_calc_seq_c_(Int  *neq,
                 real *yldot_pert,
                 Int  *nnz)
 {
+   static Int jac_count = 0;
+
+   if (PRINT_LEVEL > 0)
+   {
+      printf(" ==================\n"
+             " Jac_calc C version\n"
+             " ==================\n");
+   }
+
    Int iv;
    *nnz = 1;
    for (iv = 1; iv <= *neq; iv++)
@@ -40,6 +53,14 @@ jac_calc_seq_c_(Int  *neq,
       jac_calc_iv_(&iv, neq, t, yl, yldot00, ml, mu, wk, nnzmx, jac, ja, ia, yldot_pert, nnz);
    }
    ia[*neq] = *nnz;
+
+   jac_count++;
+   if (PRINT_JAC)
+   {
+      char fn[1024];
+      sprintf(fn, "Jac_%ld.mtx", jac_count);
+      jacmm_c_fn(fn, *neq, jac, ja, ia);
+   }
 
    return 0;
 }
@@ -345,14 +366,28 @@ jac_calc_c_(Int  *neq,
    return ret;
 }
 
-int jacmm_c_(Int *neq, real *jac, Int *ja, Int *ia)
+int jacmm_c_fn(char *fn, Int neq, real *jac, Int *ja, Int *ia)
 {
    Int i, j;
-   FILE *fp = fopen("Jacobian.IJ", "w");
+   FILE *fp = NULL;
 
-   fprintf(fp, "%% %ld %ld %ld\n", *neq, *neq, ia[*neq] - 1);
+   if (fn)
+   {
+      fp = fopen(fn, "w");
+   }
+   else
+   {
+      fp = fopen("Jacobian.IJ", "w");
+   }
 
-   for (i = 0; i < *neq; i++)
+   if (!fp)
+   {
+      return 1;
+   }
+
+   fprintf(fp, "%% %ld %ld %ld\n", neq, neq, ia[neq] - 1);
+
+   for (i = 0; i < neq; i++)
    {
       for (j = ia[i]; j < ia[i + 1]; j++)
       {
@@ -362,4 +397,9 @@ int jacmm_c_(Int *neq, real *jac, Int *ja, Int *ia)
    fclose(fp);
 
    return 0;
+}
+
+int jacmm_c_(Int *neq, real *jac, Int *ja, Int *ia)
+{
+   return jacmm_c_fn(NULL, *neq, jac, ja, ia);
 }
